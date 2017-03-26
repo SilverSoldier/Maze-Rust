@@ -1,17 +1,20 @@
 extern crate tcod;
+extern crate union_find;
 
 use tcod::console::*;
 use tcod::colors;
 use tcod::colors::Color;
+use union_find::UnionFind;
 
 const SCREEN_HEIGHT: i32 = 70;
-const SCREEN_WIDTH: i32 = 100;
+const SCREEN_WIDTH: i32 = 110;
 
 const MAP_HEIGHT: i32 = 60;
-const MAP_WIDTH: i32 = 90;
+const MAP_WIDTH: i32 = 100;
 
-const COLOR_WALL_DARK: Color = Color{r: 0, g: 0, b: 100};
-const COLOR_FLOOR_DARK: Color = Color{r: 50, g: 150, b: 150};
+const MAP_ROWS: i32 = 15;
+const MAP_COLS: i32 = 25;
+
 // set frames per second limit
 const LIMIT_FPS: i32 = 20; 
 
@@ -31,6 +34,64 @@ impl Tile{
     pub fn wall() -> Self{
         Tile{blocked: true}
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Cell{
+    top: bool,
+    right: bool,
+    left: bool,
+    down: bool,
+}
+
+impl Cell{
+    pub fn new() -> Self{
+        Cell{
+            top: true,
+            right: true,
+            left: true,
+            down: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct KruskalCell{
+    cell: Cell,
+    value: i32,
+}
+
+impl KruskalCell {
+    pub fn new() -> Self{
+        KruskalCell{
+            cell: Cell::new(),
+            value: 0,
+        }
+    }
+}
+
+fn kruskal_map() -> () {
+    let mut cell_set = vec![vec![KruskalCell::new(); MAP_COLS as usize]; MAP_ROWS as usize];
+    let mut val: i32 = 0;
+
+    // initilialize each as having unique number
+    for x in 0..MAP_ROWS{
+        for y in 0..MAP_COLS{
+            cell_set[x as usize][y as usize].value = val;
+            val += 1;
+        }
+    }
+
+    // initialize list of walls
+    let mut wall_list: Vec<(i32, i32, char)> = Vec::new();
+
+    for x in 0..MAP_ROWS{
+        for y in 0..MAP_COLS{
+            wall_list.push((x, y, 'L'));
+            wall_list.push((x, y, 'U'));
+        }
+    }
+
 }
 
 type Map = Vec<Vec<Tile>>;
@@ -54,10 +115,11 @@ fn render_all(root: &mut Root, con: &mut Offscreen, player: &Object, map: &Map){
         for i in 0..MAP_WIDTH {
             let display_wall = map[i as usize][j as usize].blocked;
             if display_wall {
-                con.set_char_background(i, j, COLOR_WALL_DARK, BackgroundFlag::Set);
+                con.put_char_ex(i, j, '#', colors::WHITE, colors::BLACK);
+                // con.set_char_background(i, j, COLOR_WALL_DARK, BackgroundFlag::Set);
             }
             else {
-                con.set_char_background(i, j, COLOR_FLOOR_DARK, BackgroundFlag::Set);
+                // con.set_char_background(i, j, COLOR_FLOOR_DARK, BackgroundFlag::Set);
             }
         }
     }
@@ -137,7 +199,7 @@ fn main() {
     tcod::system::set_fps(LIMIT_FPS);
 
     let map = make_map();
-    let mut player = Object::new(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', colors::WHITE);
+    let mut player = Object::new(1, 1, '@', colors::RED);
 
     while !root.window_closed() {
 
