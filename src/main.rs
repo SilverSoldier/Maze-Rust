@@ -1,19 +1,22 @@
 extern crate tcod;
-extern crate union_find;
+extern crate rand;
 
 use tcod::console::*;
 use tcod::colors;
 use tcod::colors::Color;
-use union_find::UnionFind;
+use rand::Rng;
 
 const SCREEN_HEIGHT: i32 = 70;
-const SCREEN_WIDTH: i32 = 110;
+const SCREEN_WIDTH: i32 = 130;
 
 const MAP_HEIGHT: i32 = 60;
-const MAP_WIDTH: i32 = 100;
+const MAP_COLS: i32 = 15;
 
-const MAP_ROWS: i32 = 15;
-const MAP_COLS: i32 = 25;
+const MAP_WIDTH: i32 = 120;
+const MAP_ROWS: i32 = 30;
+
+
+const CELL_SIZE: i32 = 4;
 
 // set frames per second limit
 const LIMIT_FPS: i32 = 20; 
@@ -23,16 +26,16 @@ const LIMIT_FPS: i32 = 20;
 // Clone and copy - let us copy values instead of moving it
 #[derive(Clone, Copy, Debug)]
 struct Tile{
-    blocked: bool,
+    is_wall: bool,
 }
 
 impl Tile{
     pub fn empty() -> Self{
-        Tile{blocked: false}
+        Tile{is_wall: false}
     }
 
-    pub fn wall() -> Self{
-        Tile{blocked: true}
+    pub fn make_wall(&mut self) ->(){
+        self.is_wall = true;
     }
 }
 
@@ -70,7 +73,35 @@ impl KruskalCell {
     }
 }
 
-fn kruskal_map() -> () {
+/* Function to merge 2 sets by setting their value to be 1 */
+fn merge(ref mut set: &mut Vec<Vec<KruskalCell>>, val1: i32, val2: i32) -> () {
+    for y in 0..MAP_COLS{
+        for x in 0..MAP_ROWS{
+            if set[x as usize][y as usize].value == val1 {
+                set[x as usize][y as usize].value = val2;
+            }
+        }
+    }
+}
+
+/* Function to check if all the elements of the set have been merged */
+fn count_is_1(ref set: &Vec<Vec<KruskalCell>>) -> bool{
+    let val: i32 = set[0][0].value;
+    for y in 0..MAP_COLS{
+        for x in 0..MAP_ROWS{
+            if set[x as usize][y as usize].value != val{
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/* Function that generates the maze using kruskal's algorithm
+ * Input: -
+ * Output: 2D vector of objects of type Cell
+ */
+fn kruskal_map() -> Vec<Vec<Cell>> {
     let mut cell_set = vec![vec![KruskalCell::new(); MAP_COLS as usize]; MAP_ROWS as usize];
     let mut val: i32 = 0;
 
@@ -92,17 +123,70 @@ fn kruskal_map() -> () {
         }
     }
 
+    while !count_is_1(&cell_set) {
+        // pick a random wall from wall list
+        let index = rand::thread_rng().gen_range(0, wall_list.len());
+        let wall = wall_list[index as usize];
+        wall_list.remove(index);
+        let x = wall.0 as usize;
+        let y = wall.1 as usize;
+            
+        if y > 0 && wall.2 == 'L' && cell_set[x][y].value != cell_set[x][y-1].value{
+            cell_set[x][y].cell.left = false;
+            cell_set[x][y-1].cell.right = false;
+            let val1 = cell_set[x][y].value;
+            let val2 = cell_set[x][y-1].value;
+            merge(&mut cell_set, val1, val2);
+        }
+
+        if x > 0 && wall.2 == 'U' && cell_set[x][y].value != cell_set[x-1][y].value{
+            cell_set[x][y].cell.top = false;
+            cell_set[x-1][y].cell.down = false;
+            let val1 = cell_set[x][y].value;
+            let val2 = cell_set[x-1][y].value;
+            merge(&mut cell_set, val1, val2);
+        }
+    }
+
+    let mut cells = vec![vec![Cell::new(); MAP_COLS as usize]; MAP_ROWS as usize];
+
+    for x in 0..MAP_ROWS{
+        for y in 0..MAP_COLS{
+            cells[x as usize][y as usize] = cell_set[x as usize][y as usize].cell;
+        }
+    }
+
+    return cells;
+
 }
 
 type Map = Vec<Vec<Tile>>;
 
-fn make_map() -> Map {
+fn make_map(ref cells :&Vec<Vec<Cell>>) -> Map {
     // initialize with unblocked tiles using the vec! macro
     // syntax vec![val, no. of times]   no. of times is expected as usize not i32
     let mut map = vec![vec![Tile::empty(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
 
-    map[10][10] = Tile::wall();
-    map[20][20] = Tile::wall();
+    for x in 0..MAP_ROWS{
+        for y in 0..MAP_COLS{
+            // println!("{}", x);
+            map[(x * CELL_SIZE) as usize][(y * CELL_SIZE) as usize].make_wall();
+            map[(x * CELL_SIZE) as usize][((y+1) * CELL_SIZE - 1) as usize].make_wall();
+            map[((x+1) * CELL_SIZE - 1) as usize][(y * CELL_SIZE) as usize].make_wall();
+            map[((x+1) * CELL_SIZE - 1) as usize][((y+1) * CELL_SIZE - 1) as usize].make_wall();
+
+            for k in 1..(CELL_SIZE -1) {
+                // println!("{}", k);
+                map[(x * CELL_SIZE) as usize][(y * CELL_SIZE + k) as usize].is_wall = cells[x as usize][y as usize].top;
+                map[(x * CELL_SIZE + k) as usize][(y * CELL_SIZE) as usize].is_wall = cells[x as usize][y as usize].left;
+                map[(x * CELL_SIZE + k) as usize][((y+1) * CELL_SIZE - 1) as usize].is_wall = cells[x as usize][y as usize].right;
+                map[((x+1) * CELL_SIZE - 1) as usize][(y * CELL_SIZE + k) as usize].is_wall = cells[x as usize][y as usize].down;
+            }
+        }
+    }
+
+    // map[10][10] = Tile::wall();
+    // map[20][20] = Tile::wall();
 
     map
 }
@@ -113,7 +197,7 @@ fn render_all(root: &mut Root, con: &mut Offscreen, player: &Object, map: &Map){
     // draw map
     for j in 0..MAP_HEIGHT {
         for i in 0..MAP_WIDTH {
-            let display_wall = map[i as usize][j as usize].blocked;
+            let display_wall = map[i as usize][j as usize].is_wall;
             if display_wall {
                 con.put_char_ex(i, j, '#', colors::WHITE, colors::BLACK);
                 // con.set_char_background(i, j, COLOR_WALL_DARK, BackgroundFlag::Set);
@@ -145,7 +229,7 @@ impl Object{
     }
 
     pub fn move_by(&mut self, dx: i32, dy: i32, map: &Map) {
-        if !map[(self.x + dx) as usize][(self.y + dy) as usize].blocked {
+        if !map[(self.x + dx) as usize][(self.y + dy) as usize].is_wall {
             self.x += dx;
             self.y += dy;
         }
@@ -198,7 +282,9 @@ fn main() {
     let mut con = Offscreen::new(MAP_WIDTH, MAP_HEIGHT);
     tcod::system::set_fps(LIMIT_FPS);
 
-    let map = make_map();
+    let cells: Vec<Vec<Cell>>;
+    cells = kruskal_map();
+    let map = make_map(&cells);
     let mut player = Object::new(1, 1, '@', colors::RED);
 
     while !root.window_closed() {
